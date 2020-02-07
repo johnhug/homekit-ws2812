@@ -7,16 +7,18 @@
 #include <math.h>
 
 // B G R W order on struct (ignoring white value)
-const ws2812_pixel_t WHITE      = {{255,255,255,  0}};
-const ws2812_pixel_t RED        = {{  0,  0,255,  0}};
-const ws2812_pixel_t GREEN      = {{  0,255,  0,  0}};
-const ws2812_pixel_t BLUE       = {{255,  0,  0,  0}};
-const ws2812_pixel_t YELLOW     = {{  0,255,255,  0}};
-const ws2812_pixel_t MAGENTA	= {{255,  0,255,  0}};
-const ws2812_pixel_t CYAN       = {{255,255,  0,  0}};
-
 #define RAINBOW_N 7
-const ws2812_pixel_t *const RAINBOW[] = {&WHITE,&BLUE,&GREEN,&RED,&YELLOW,&MAGENTA,&CYAN};
+ws2812_pixel_t RAINBOW[RAINBOW_N] = {
+	{{255,255,255,  0}}, // white
+	{{255,  0,  0,  0}}, // blue
+	{{  0,255,  0,  0}}, // green
+	{{  0,  0,255,  0}}, // red
+	{{  0,255,255,  0}}, // yellow
+	{{255,  0,255,  0}}, // magenta
+	{{255,255,  0,  0}}  // cyan
+};
+
+const int COMET = 15;
 
 int _led_count;
 
@@ -26,7 +28,10 @@ ws2812_pixel_t *black;
 bool _running = true;
 int _position = -1;
 float _brightness = 1.0f;
-ws2812_pixel_t _solid_color = {{255,255,255,  0}};
+ws2812_pixel_t _solid_color 		= {{255,255,255,  0}}; // white
+ws2812_pixel_t _complement_color 	= {{  0,  0,  0,  0}}; // black
+ws2812_pixel_t _colors[2] = {{{255,255,255,  0}}, {{  0,  0,  0,  0}}};
+ws2812_pixel_t _stripes[2] = {{{255,255,255,  0}}, {{255,255,255,  0}}};
 int _mode_index = MD_STATIC;
 bool _inverted = false;
 int _mode_delay = 0;
@@ -44,32 +49,33 @@ void setPixel(int index, ws2812_pixel_t color, float brightnessMod) {
 	pixels[index].blue = color.blue * _brightness * brightnessMod;
 }
 
-void solid() {
+void rotation(int color_count, ws2812_pixel_t colors[]) {
+	_position = (_position + 1) % color_count % _led_count;
+
 	for (int i = 0; i < _led_count; i++) {
-		setPixel(i, _solid_color, 1.0f);
+		int colorIndex = (i + _position) % color_count;
+
+		setPixel(i, colors[colorIndex], 1.0f);
 	}
+
 	ws2812_i2s_update(pixels, PIXEL_RGB);
 }
 
-const int COMET = 15;
-void comets(bool rainbow) {
-	_position = (_position + 1) % ((RAINBOW_N * COMET) % _led_count);
-	int rainbowIndex = (_position / COMET) % RAINBOW_N;
+void comets(int color_count, ws2812_pixel_t colors[]) {
+	_position = (_position + 1) % ((color_count * COMET) % _led_count);
+	int colorIndex = (_position / COMET) % color_count;
 
 	for (int i = 0; i < _led_count; i++) {
 		int mod = (i + _position) % COMET;
-		if (mod == 0 && i > 0) rainbowIndex = (rainbowIndex + 1) % RAINBOW_N;
+		if (mod == 0 && i > 0) colorIndex = (colorIndex + 1) % color_count;
 		
 		// W 2 2 4 4 8 8 16 16 32 32 64 64 128 128
 		if (mod == 0) {
-			setPixel(i, WHITE, 1.0f);
+			setPixel(i, RAINBOW[0], 1.0f);
 		}
 		else {
 			float fade = 1 / (float) pow(2, floor(mod / 2));
-			if (rainbow)
-				setPixel(i, *RAINBOW[rainbowIndex], fade);
-			else
-				setPixel(i, _solid_color, fade);
+			setPixel(i, colors[colorIndex], fade);
 		}
 	}
 	ws2812_i2s_update(pixels, PIXEL_RGB);
@@ -85,32 +91,38 @@ void ws2812_service(void *_args) {
 			
 			if (now - last_call_time > _mode_delay) {
 				last_call_time = now;
-				
+
 				switch (_mode_index) {
 					case MD_STATIC:
-						solid();
+						rotation(1, _colors);
+						break;
+					case MD_STRIPES:
+						rotation(2, _stripes);
 						break;
 					case MD_COMPLIMENT:
-						solid();
+						rotation(2, _colors);
+						break;
+					case MD_RAINBOW:
+						rotation(RAINBOW_N, RAINBOW);
 						break;
 					case MD_COMET:
-						comets(false);
+						comets(1, _colors);
 						break;
 					case MD_COMET_STRIPES:
-						comets(false);
+						comets(2, _stripes);
 						break;
 					case MD_COMET_COMPLIMENT:
-						comets(false);
+						comets(2, _colors);
 						break;
 					case MD_COMET_RAINBOW:
-						comets(true);
+						comets(RAINBOW_N, RAINBOW);
 						break;
 					default:
-						solid();
+						rotation(1, _colors);
 				}
 			}
 		}
-		vTaskDelay(33 / portTICK_PERIOD_MS);
+		vTaskDelay(10 / portTICK_PERIOD_MS);
 	}
 }
 
@@ -142,6 +154,14 @@ void ws2812_setColor(ws2812_pixel_t color) {
 	_solid_color.red = color.red;
 	_solid_color.green = color.green;
 	_solid_color.blue = color.blue;
+	
+	_complement_color.red = 255 - _solid_color.red;
+	_complement_color.green = 255 - _solid_color.green;
+	_complement_color.blue = 255 - _solid_color.blue;
+	
+	_colors[0] = _solid_color;
+	_colors[1] = _complement_color;
+	_stripes[0] = _solid_color;
 }
 
 void ws2812_setBrightness(int brightness) {
@@ -154,7 +174,7 @@ void ws2812_setMode(int mode_index) {
 
 void ws2812_setSpeed(int speed) {
 	// max delay 250ms, min delay 0ms
-	_mode_delay = abs((speed - 0) * (0 - 250) / (100 - 0) + 250);
+	_mode_delay = speed * -2.5f + 250;
 }
 
 void ws2812_setInverted(bool inverted) {

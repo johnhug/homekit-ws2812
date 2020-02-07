@@ -97,7 +97,9 @@ void led_hue_set(homekit_value_t value) {
     hk_hue = value.float_value;
 
     ws2812_pixel_t color = { { 0, 0, 0, 0 } };
-    hsi2rgb(hk_hue, hk_saturation, 100, &color);
+    hs2rgb(hk_hue, hk_saturation / 100.0f, &color);
+
+    //printf("hue:%f sat:%f rgb:%02x%02x%02x\n", hk_hue, hk_saturation, color.red, color.green, color.blue);
 
     ws2812_setColor(color);
 }
@@ -108,9 +110,11 @@ homekit_value_t led_saturation_get() {
 
 void led_saturation_set(homekit_value_t value) {
     hk_saturation = value.float_value;
-
+    
     ws2812_pixel_t color = { { 0, 0, 0, 0 } };
-    hsi2rgb(hk_hue, hk_saturation, 100, &color);
+    hs2rgb(hk_hue, hk_saturation / 100.0f, &color);
+
+    //printf("hue:%f sat:%f rgb:%02x%02x%02x\n", hk_hue, hk_saturation, color.red, color.green, color.blue);
 
     ws2812_setColor(color);
 }
@@ -179,7 +183,7 @@ homekit_accessory_t *accessories[] = {
             .permissions = homekit_permissions_paired_read
                          | homekit_permissions_paired_write,
             .min_value = (float[]) {0},
-            .max_value = (float[]) {10},
+            .max_value = (float[]) {7},
             .min_step = (float[]) {1},
             .value = HOMEKIT_INT_(0),
             .getter = led_mode_get,
