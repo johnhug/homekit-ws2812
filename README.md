@@ -5,6 +5,7 @@ Dependencies:
 - https://github.com/maximkulkin/esp-homekit
 - https://github.com/maximkulkin/esp-wolfssl
 - https://github.com/maximkulkin/esp-cjson
+- https://github.com/maximkulkin/esp-wifi-config
 
 Heavily derived from examples/led_strip_animation in https://github.com/maximkulkin/esp-homekit-demo
 
