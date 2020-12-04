@@ -24,12 +24,13 @@
 #define LED_COUNT 299      // this is the number of WS2812B leds on the strip
 #define LED_INBUILT_GPIO 2 // this is the onboard LED used to show on/off only
 
-#define UUID_MODE    "1C52000A-457C-4D3C-AABA-E6F207422A10"
-#define UUID_SPEED   "1C52000A-457C-4D3C-AABA-E6F207422A11"
-#define UUID_REVERSE "1C52000A-457C-4D3C-AABA-E6F207422A12"
-#define UUID_DENSITY "1C52000A-457C-4D3C-AABA-E6F207422A13"
-#define UUID_FADE    "1C52000A-457C-4D3C-AABA-E6F207422A14"
-#define UUID_COUNT   "1C52000A-457C-4D3C-AABA-E6F207422A15"
+#define UUID_MODE       "1C52000A-457C-4D3C-AABA-E6F207422A10"
+#define UUID_SPEED      "1C52000A-457C-4D3C-AABA-E6F207422A11"
+#define UUID_REVERSE    "1C52000A-457C-4D3C-AABA-E6F207422A12"
+#define UUID_DENSITY    "1C52000A-457C-4D3C-AABA-E6F207422A13"
+#define UUID_FADE       "1C52000A-457C-4D3C-AABA-E6F207422A14"
+#define UUID_COUNT      "1C52000A-457C-4D3C-AABA-E6F207422A15"
+#define UUID_MODE_NAME  "1C52000A-457C-4D3C-AABA-E6F207422A16"
 
 ws2812_pixel_t *_colors;
 
@@ -89,7 +90,7 @@ int getColorIndex(const homekit_characteristic_t *ch) {
 
 homekit_value_t led_on_get(const homekit_characteristic_t *ch) {
     int index = getColorIndex(ch);
-    return HOMEKIT_BOOL(hk_on[index]);
+    return HOMEKIT_BOOL(hk_on[index] && hk_on[0]);
 }
 
 void led_on_set(homekit_characteristic_t *ch, const homekit_value_t value) {
@@ -137,6 +138,36 @@ homekit_value_t led_mode_get() {
 void led_mode_set(homekit_value_t value) {
     hk_mode = value.int_value;
     ws2812_setMode(hk_mode);
+}
+
+homekit_value_t led_mode_name_get() {
+    char *name;
+    switch (hk_mode) {
+        case MD_SOLID: 
+            name = "Solid";
+            break;
+        case MD_CHASE: 
+            name = "Chase";
+            break;
+        case MD_TWINKLE: 
+            name = "Twinkle";
+            break;
+        case MD_SEQUENCE: 
+            name = "Sequence";
+            break;
+        case MD_STRIPES: 
+            name = "Sripes";
+            break;
+        case MD_COMETS:
+            name = "Comets";
+            break;
+        case MD_FIREWORKS: 
+            name = "Fireworks";
+            break;
+        default: 
+            name = "Ooopies";
+    }
+    return HOMEKIT_STRING(name, .is_static=true);
 }
 
 homekit_value_t led_speed_get() {
@@ -355,6 +386,15 @@ homekit_accessory_t *accessories[] = {
             .value = HOMEKIT_INT_(1),
             .getter = led_mode_get,
             .setter = led_mode_set
+                ),
+            HOMEKIT_CHARACTERISTIC(
+                CUSTOM,
+            .type = UUID_MODE_NAME,
+            .description = "FXModeName",
+            .format = homekit_format_string,
+            .permissions = homekit_permissions_paired_read,
+            .value = HOMEKIT_STRING_("Init", .is_static=true),
+            .getter = led_mode_name_get
                 ),
             HOMEKIT_CHARACTERISTIC(
                 CUSTOM,
