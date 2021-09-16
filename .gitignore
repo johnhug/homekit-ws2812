@@ -1,4 +1,6 @@
 wifi.h
+homekit_conf.h
+*/qrcode.png
 
 firmware/
 build/

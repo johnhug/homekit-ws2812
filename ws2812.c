@@ -10,6 +10,7 @@
 ws2812_pixel_t WHITE = {{255,255,255,0}};
 
 int _led_count;
+int _order_type;
 
 ws2812_pixel_t *pixels;
 ws2812_pixel_t *black;
@@ -34,9 +35,17 @@ int constrain(int input, int min, int max) {
 
 void setPixel(int index, ws2812_pixel_t color, float brightnessMod) {
 	if (_reversed) index = (_led_count - 1) - index;
-	pixels[index].red = color.red * _brightness * brightnessMod;
-	pixels[index].green = color.green * _brightness * brightnessMod;
-	pixels[index].blue = color.blue * _brightness * brightnessMod;
+	if (_order_type == OT_GRB) {
+		pixels[index].green = color.green * _brightness * brightnessMod;
+		pixels[index].red = color.red * _brightness * brightnessMod;
+		pixels[index].blue = color.blue * _brightness * brightnessMod;
+	}
+	else if (_order_type = OT_RGB) {
+		// underlying library assumes ws2812 which is GRB bit ordering
+		pixels[index].green = color.red * _brightness * brightnessMod;
+		pixels[index].red = color.green * _brightness * brightnessMod;
+		pixels[index].blue = color.blue * _brightness * brightnessMod;
+	}
 }
 
 bool isBlack(int index) {
@@ -164,11 +173,12 @@ void ws2812_service(void *_args) {
 	}
 }
 
-void ws2812_init(int pixel_number) {
+void ws2812_init(int pixel_number, int order_type) {
 	time_t t;
 	srand((unsigned) time(&t));
 	
 	_led_count = pixel_number;
+	_order_type = order_type;
 
 	pixels = (ws2812_pixel_t*) malloc(_led_count * sizeof(ws2812_pixel_t));
 	black = (ws2812_pixel_t*) malloc(_led_count * sizeof(ws2812_pixel_t));

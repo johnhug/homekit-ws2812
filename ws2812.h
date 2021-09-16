@@ -11,7 +11,11 @@
 #define MD_COMETS           6 // comets of colors
 #define MD_FIREWORKS        7 // random pixels light up with one of the colors and fade
 
-void ws2812_init(int pixel_number);
+// byte order type for WS281x serial data protocol
+#define OT_GRB				0
+#define OT_RGB				1
+
+void ws2812_init(int pixel_number, int order_type);
 
 void ws2812_on(bool on);
 

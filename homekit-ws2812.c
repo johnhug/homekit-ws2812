@@ -20,8 +20,8 @@
 
 #include "converters.h"
 #include "ws2812.h"
+#include "homekit_conf.h"
 
-#define LED_COUNT 299      // this is the number of WS2812B leds on the strip
 #define LED_INBUILT_GPIO 2 // this is the onboard LED used to show on/off only
 
 #define UUID_MODE       "1C52000A-457C-4D3C-AABA-E6F207422A10"
@@ -206,7 +206,7 @@ void led_fade_set(homekit_value_t value) {
     ws2812_setFade(hk_fade);
 }
 
-homekit_characteristic_t name = HOMEKIT_CHARACTERISTIC_(NAME, "Chihiro");
+homekit_characteristic_t name = HOMEKIT_CHARACTERISTIC_(NAME, HOMEKIT_NAME);
 
 homekit_service_t color_2 = 
     HOMEKIT_SERVICE_(LIGHTBULB, .id = 2, .primary = false, .characteristics = (homekit_characteristic_t*[]) {
@@ -342,7 +342,7 @@ homekit_accessory_t *accessories[] = {
         HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .id = 100, .characteristics = (homekit_characteristic_t*[]) {
             &name,
             HOMEKIT_CHARACTERISTIC(MANUFACTURER, "John Hug"),
-            HOMEKIT_CHARACTERISTIC(SERIAL_NUMBER, "2baff4898fe9"),
+            HOMEKIT_CHARACTERISTIC(SERIAL_NUMBER, HOMEKIT_SERIAL),
             HOMEKIT_CHARACTERISTIC(MODEL, "WS2812-FX"),
             HOMEKIT_CHARACTERISTIC(FIRMWARE_REVISION, "0.5"),
             HOMEKIT_CHARACTERISTIC(IDENTIFY, identify),
@@ -352,7 +352,7 @@ homekit_accessory_t *accessories[] = {
             .id = 1, 
             .primary = true,
             .characteristics = (homekit_characteristic_t*[]) {
-            HOMEKIT_CHARACTERISTIC(NAME, "Chihiro"),
+            HOMEKIT_CHARACTERISTIC(NAME, HOMEKIT_NAME),
             HOMEKIT_CHARACTERISTIC(
                 ON, true,
             .getter_ex = led_on_get,
@@ -488,8 +488,8 @@ void on_homekit_event(homekit_event_t event) {
 homekit_server_config_t config = {
     .accessories = accessories,
     .category = homekit_accessory_category_lightbulb,
-    .password = "925-97-411",
-    .setupId = "8327",
+    .password = HOMEKIT_PASSWORD,
+    .setupId = HOMEKIT_SETUPID,
     .on_event = on_homekit_event
 };
 
@@ -501,15 +501,15 @@ void user_init(void) {
     gpio_enable(LED_INBUILT_GPIO, GPIO_OUTPUT);
 
     updateColors();
-    ws2812_init(LED_COUNT);
+    ws2812_init(LED_COUNT, LED_ORDER_TYPE);
 
-    wifi_config_init("Chihiro", NULL, on_wifi_ready);
+    wifi_config_init(HOMEKIT_NAME, NULL, on_wifi_ready);
 
     uint8_t macaddr[6];
     sdk_wifi_get_macaddr(STATION_IF, macaddr);
-    int name_len = 7 + 1 + 6 + 1;
+    int name_len = sizeof(HOMEKIT_NAME) + 1 + 6 + 1;
     char *name_value = malloc(name_len);
-    snprintf(name_value, name_len, "Chihiro-%02X%02X%02X", macaddr[3], macaddr[4], macaddr[5]);
+    snprintf(name_value, name_len, "%s-%02X%02X%02X", HOMEKIT_NAME, macaddr[3], macaddr[4], macaddr[5]);
     name.value = HOMEKIT_STRING(name_value);
 
     homekit_server_init(&config);
