@@ -12,7 +12,16 @@ ws2812_pixel_t WHITE = {{255,255,255,0}};
 int _led_count;
 int _order_type;
 
-ws2812_pixel_t *pixels;
+typedef struct {
+	uint8_t blue;
+    uint8_t green;
+    uint8_t red;
+    float brightness;
+    bool increasing;
+} working_pixel_t; 
+
+working_pixel_t *working_pixels;
+ws2812_pixel_t *pixel_buffer;
 ws2812_pixel_t *black;
 
 bool _running = true;
@@ -33,24 +42,62 @@ int constrain(int input, int min, int max) {
 	return input;
 }
 
-void setPixel(int index, ws2812_pixel_t color, float brightnessMod) {
-	if (_reversed) index = (_led_count - 1) - index;
-	if (_order_type == OT_GRB) {
-		pixels[index].green = color.green * _brightness * brightnessMod;
-		pixels[index].red = color.red * _brightness * brightnessMod;
-		pixels[index].blue = color.blue * _brightness * brightnessMod;
-	}
-	else if (_order_type = OT_RGB) {
-		// underlying library assumes ws2812 which is GRB bit ordering
-		pixels[index].green = color.red * _brightness * brightnessMod;
-		pixels[index].red = color.green * _brightness * brightnessMod;
-		pixels[index].blue = color.blue * _brightness * brightnessMod;
-	}
+float constrainf(float input) {
+	if (input > 1.0f) return 1.0f;
+	if (input < _fade * 0.25f) return 0.0f;
+	return input;
 }
 
-bool isBlack(int index) {
-	ws2812_pixel_t p = pixels[index];
-	return p.red + p.green + p.blue == 0;
+void update() {
+	for (int i = 0; i < _led_count; i++) {
+		int targetIndex = _reversed ? (_led_count - 1) - i : i;
+		working_pixel_t wp = working_pixels[i];
+		ws2812_pixel_t *p = &pixel_buffer[targetIndex];
+		if (_order_type == OT_RGB) {
+			// underlying library assumes ws2812 which is GRB bit ordering
+			p->green = wp.red;
+			p->red = wp.green;
+			p->blue = wp.blue;
+		}		
+		else {
+			// default GRB bit ordering
+			p->green = wp.green;
+			p->red = wp.red;
+			p->blue = wp.blue;
+		}
+		float adjust = wp.brightness * _brightness;
+		p->green *= adjust;
+		p->red *= adjust;
+		p->blue *= adjust;
+	}
+	ws2812_i2s_update(pixel_buffer, PIXEL_RGB);
+}
+
+void setPixel(int index, ws2812_pixel_t color, float brightnessMod) {
+	working_pixel_t *wp = &working_pixels[index];
+	wp->red = color.red;
+	wp->green = color.green;
+	wp->blue = color.blue;
+	wp->brightness = brightnessMod;
+	wp->increasing = false;
+}
+
+void fadePixel(int index, float brightnessMod) {
+	working_pixel_t *wp = &working_pixels[index];
+	if (wp->increasing) brightnessMod = 1.0f / brightnessMod;
+	wp->brightness = constrainf(wp->brightness * brightnessMod);
+}
+
+void setFade(int index, bool increasing) {
+	working_pixels[index].increasing = increasing;
+}
+
+bool isBright(int index) {
+	return working_pixels[index].brightness == 1.0f;
+}
+
+bool isDark(int index) {
+	return working_pixels[index].brightness == 0.0f;
 }
 
 void solid() {
@@ -58,7 +105,7 @@ void solid() {
 		for (int i = 0; i < _led_count; i++) {
 			setPixel(i, _colors[0], 1.0f);
 		}
-		ws2812_i2s_update(pixels, PIXEL_RGB);
+		update();
 	}
 }
 
@@ -68,20 +115,24 @@ void chase() {
 		int mod = i % _color_count;
 		setPixel(i, _colors[i % _color_count], 1 / pow(2, floor(abs(_position - mod) / (_color_count * _fade * 0.25f))));
 	}
-	ws2812_i2s_update(pixels, PIXEL_RGB);
+	update();
 }
 
 void twinkle() {
 	for (int i = 0; i < _led_count; i++) {
-		setPixel(i, pixels[i], _fade);
+		if (isBright(i)) {
+			setFade(i, false);
+		}
+		fadePixel(i, _fade);
 	}
 	for (int i = _led_count * _density; i > 0; i--) {
 		int index = rand() % _led_count;
-		if (isBlack(index)) {
-			setPixel(index, _colors[index % _color_count], 1.0f);
+		if (isDark(index)) {
+			setPixel(index, _colors[index % _color_count], _fade * 0.25f);
+			setFade(index, true);
 		}
 	}
-	ws2812_i2s_update(pixels, PIXEL_RGB);
+	update();
 }
 
 void rotation(int width) {
@@ -93,7 +144,7 @@ void rotation(int width) {
 
 		setPixel(i, _colors[colorIndex], 1.0f);
 	}
-	ws2812_i2s_update(pixels, PIXEL_RGB);
+	update();
 }
 
 void comets() {
@@ -110,18 +161,18 @@ void comets() {
 			setPixel(i, _colors[colorIndex], 1 / pow(2, floor(mod / (width * _fade * 0.25f))));
 		}
 	}
-	ws2812_i2s_update(pixels, PIXEL_RGB);
+	update();
 }
 
 void fireworks() {
 	for (int i = 0; i < _led_count; i++) {
-		setPixel(i, pixels[i], _fade);
+		fadePixel(i, _fade);
 	}
 	for (int i = _led_count * _density; i > 0; i--) {
 		int index = rand() % _led_count;
 		setPixel(index, _colors[rand() % _color_count], 1.0f);
 	}
-	ws2812_i2s_update(pixels, PIXEL_RGB);
+	update();
 }
 
 void ws2812_service(void *_args) {
@@ -180,7 +231,8 @@ void ws2812_init(int pixel_number, int order_type) {
 	_led_count = pixel_number;
 	_order_type = order_type;
 
-	pixels = (ws2812_pixel_t*) malloc(_led_count * sizeof(ws2812_pixel_t));
+	working_pixels = (working_pixel_t*) malloc(_led_count * sizeof(working_pixel_t));
+	pixel_buffer = (ws2812_pixel_t*) malloc(_led_count * sizeof(ws2812_pixel_t));
 	black = (ws2812_pixel_t*) malloc(_led_count * sizeof(ws2812_pixel_t));
 
 	for (int i = 0; i < _led_count; i++) {
